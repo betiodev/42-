@@ -61,6 +61,86 @@ const EASTER_EGG_SCORES = [
   4200,  // 42 * 100
 ];
 
+// Easter-egg messages keyed by score
+const EASTER_EGG_MESSAGES = {
+  42:   'The Answer to Life, the Universe,\nand Everything.',
+  69:   'Nice.',
+  100:  'Welcome to the Century Club!',
+  142:  '100 + 42 = Enlightenment.',
+  256:  'A Perfect Power of Two.',
+  314:  'Mmm... Pi.',
+  420:  'Blaze it.',
+  666:  'The Number of the Beast!',
+  777:  'JACKPOT!',
+  1000: 'Welcome to the Grand Club.',
+  1337: 'H4X0R STATUS: L33T',
+  4200: 'The Ultimate Answer x 100.',
+};
+
+// Paywall state
+const STORAGE_KEY_PRO = '42game_pro';
+
+function isProUnlocked() {
+  try {
+    return localStorage.getItem(STORAGE_KEY_PRO) === 'true';
+  } catch (e) { return false; }
+}
+
+function unlockPro() {
+  try { localStorage.setItem(STORAGE_KEY_PRO, 'true'); } catch (e) {}
+}
+
+// Haptics helper
+function triggerHaptic(style) {
+  const settings = loadSettings();
+  if (!settings.haptics) return;
+  try {
+    if (navigator.vibrate) {
+      const patterns = { light: 10, medium: 25, heavy: 50 };
+      navigator.vibrate(patterns[style] || 15);
+    }
+  } catch (e) {}
+}
+
+// Shared button factory (used across scenes)
+function createButton(scene, x, y, label, color, callback, opts) {
+  const W = (opts && opts.width) || 240;
+  const H = (opts && opts.height) || 56;
+  const R = 14;
+  const textColor = (opts && opts.textColor) || '#ffffff';
+
+  const bg = scene.add.graphics();
+  const colorInt = (typeof color === 'string')
+    ? Phaser.Display.Color.HexStringToColor(color).color
+    : color;
+  bg.fillStyle(colorInt, 1);
+  bg.fillRoundedRect(x - W / 2, y - H / 2, W, H, R);
+
+  const text = scene.add.text(x, y, label, {
+    fontSize: '24px', fill: textColor, fontStyle: 'bold',
+    fontFamily: 'Arial, sans-serif',
+  }).setOrigin(0.5);
+
+  const hitZone = scene.add.zone(x, y, W, H).setInteractive({ useHandCursor: true });
+
+  hitZone.on('pointerdown', () => {
+    triggerHaptic('light');
+    bg.setAlpha(0.6);
+    text.setAlpha(0.6);
+  });
+  hitZone.on('pointerup', () => {
+    bg.setAlpha(1);
+    text.setAlpha(1);
+    callback();
+  });
+  hitZone.on('pointerout', () => {
+    bg.setAlpha(1);
+    text.setAlpha(1);
+  });
+
+  return { bg, text, hitZone };
+}
+
 // ============================================================
 //  LOCALSTORAGE HELPERS
 // ============================================================
@@ -101,9 +181,9 @@ function saveSettings(settings) {
 function loadSettings() {
   try {
     const val = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    return val ? JSON.parse(val) : { sfx: true, music: true };
+    return val ? JSON.parse(val) : { sfx: true, haptics: true };
   } catch (e) {
-    return { sfx: true, music: true };
+    return { sfx: true, haptics: true };
   }
 }
 
@@ -112,12 +192,156 @@ function loadSettings() {
 // ============================================================
 class TitleScene extends Phaser.Scene {
   constructor() { super('TitleScene'); }
+
   create() {
-    this.add.text(
-      this.scale.width / 2, this.scale.height / 2,
-      '42?\nTitle Scene\n(placeholder)',
-      { fontSize: '32px', fill: '#fff', align: 'center' }
-    ).setOrigin(0.5);
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // ---- background gradient (top dark → bottom darker) ----
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ---- "42" large title ----
+    this.add.text(W / 2, H * 0.22, '42', {
+      fontSize: '130px',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+      fill: '#e94560',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // ---- "?" curve (upper part of question mark) ----
+    // We render "?" but overlay the dot with our own interactive circle
+    const qText = this.add.text(W / 2, H * 0.38, '?', {
+      fontSize: '110px',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+      fill: '#e94560',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // ---- Interactive dot (the "." of the "?") ----
+    // Position at the bottom-center of the question mark glyph
+    const dotX = W / 2 + 2;
+    const dotY = qText.y + qText.displayHeight * 0.38;
+    const dotRadius = 14;
+
+    // Mask out the original dot with a small rectangle matching bg color
+    const mask = this.add.graphics();
+    mask.fillStyle(0x1a1a2e, 1);
+    mask.fillRect(dotX - 20, dotY - 18, 40, 36);
+
+    // The tappable dot
+    this.dot = this.add.circle(dotX, dotY, dotRadius, 0xffffff);
+    this.dot.setInteractive({ useHandCursor: true });
+
+    // Subtle glow ring behind the dot
+    this.glowRing = this.add.circle(dotX, dotY, dotRadius + 8);
+    this.glowRing.setStrokeStyle(3, 0xe94560, 0.4);
+    this.glowRing.setFillStyle(0, 0); // transparent fill
+
+    // Pulse animation
+    this.tweens.add({
+      targets: [this.glowRing],
+      scaleX: 1.6,
+      scaleY: 1.6,
+      alpha: 0,
+      duration: 1200,
+      repeat: -1,
+      ease: 'Sine.easeOut',
+    });
+    this.tweens.add({
+      targets: this.dot,
+      scaleX: 1.15,
+      scaleY: 1.15,
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // ---- Dot tap: blink easter egg ----
+    this.dotTapCount = 0;
+    this.dot.on('pointerdown', () => {
+      this.dotTapCount++;
+      triggerHaptic('medium');
+
+      // Color-cycle blink
+      this.tweens.killTweensOf(this.dot);
+      const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
+      let i = 0;
+      this.dot.setScale(2);
+      this.dot.setFillStyle(colors[0]);
+
+      const blinkEvent = this.time.addEvent({
+        delay: 60,
+        repeat: colors.length - 1,
+        callback: () => {
+          i++;
+          if (i < colors.length) {
+            this.dot.setFillStyle(colors[i]);
+          }
+          if (i >= colors.length - 1) {
+            // Restore
+            this.dot.setFillStyle(0xffffff);
+            this.dot.setScale(1);
+            this.tweens.add({
+              targets: this.dot,
+              scaleX: 1.15,
+              scaleY: 1.15,
+              duration: 800,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            });
+          }
+        },
+      });
+
+      // 42 taps on the dot = secret message
+      if (this.dotTapCount === 42) {
+        triggerHaptic('heavy');
+        const secret = this.add.text(W / 2, H * 0.52, 'You found the answer.', {
+          fontSize: '22px', fill: '#e94560', fontStyle: 'italic',
+          fontFamily: 'Georgia, serif',
+        }).setOrigin(0.5).setAlpha(0);
+
+        this.tweens.add({
+          targets: secret,
+          alpha: 1, y: secret.y - 10,
+          duration: 600,
+          ease: 'Back.easeOut',
+          yoyo: true,
+          hold: 2000,
+          onComplete: () => secret.destroy(),
+        });
+      }
+    });
+
+    // ---- High score display ----
+    const hi = loadHighScore();
+    if (hi > 0) {
+      this.add.text(W / 2, H * 0.56, 'HIGH SCORE: ' + hi, {
+        fontSize: '20px', fill: '#555580',
+        fontFamily: 'Arial, sans-serif',
+      }).setOrigin(0.5);
+    }
+
+    // ---- Buttons ----
+    createButton(this, W / 2, H * 0.70, 'START', '#e94560', () => {
+      this.scene.start('GameScene');
+    });
+
+    createButton(this, W / 2, H * 0.80, 'SETTINGS', '#0f3460', () => {
+      this.scene.start('SettingsScene');
+    });
+
+    // ---- Alpha badge ----
+    if (ALPHA_MODE) {
+      this.add.text(W - 12, 12, 'ALPHA', {
+        fontSize: '13px', fill: '#ff6600', fontStyle: 'bold',
+        fontFamily: 'monospace',
+      }).setOrigin(1, 0).setAlpha(0.7);
+    }
   }
 }
 
@@ -134,23 +358,385 @@ class GameScene extends Phaser.Scene {
 
 class GameOverScene extends Phaser.Scene {
   constructor() { super('GameOverScene'); }
+
+  init(data) {
+    this.finalScore = data.score || 0;
+  }
+
   create() {
-    this.add.text(
-      this.scale.width / 2, this.scale.height / 2,
-      'Game Over Scene\n(placeholder)',
-      { fontSize: '32px', fill: '#fff', align: 'center' }
-    ).setOrigin(0.5);
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // ---- White background ----
+    this.cameras.main.setBackgroundColor('#ffffff');
+
+    // ---- "GAME OVER" header ----
+    this.add.text(W / 2, H * 0.10, 'GAME OVER', {
+      fontSize: '42px', fill: '#1a1a2e', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5);
+
+    // ---- Score display (big number) ----
+    const scoreText = this.add.text(W / 2, H * 0.23, '' + this.finalScore, {
+      fontSize: '90px', fill: '#e94560', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5);
+
+    // Entrance animation: score counts up from 0
+    let displayScore = { val: 0 };
+    this.tweens.add({
+      targets: displayScore,
+      val: this.finalScore,
+      duration: Math.min(1200, this.finalScore * 15),
+      ease: 'Cubic.easeOut',
+      onUpdate: () => {
+        scoreText.setText('' + Math.floor(displayScore.val));
+      },
+      onComplete: () => {
+        scoreText.setText('' + this.finalScore);
+      },
+    });
+
+    // ---- New high score detection ----
+    let yOffset = H * 0.33;
+    const isNewHigh = saveHighScore(this.finalScore);
+    if (isNewHigh && this.finalScore > 0) {
+      const highLabel = this.add.text(W / 2, yOffset, 'NEW HIGH SCORE!', {
+        fontSize: '26px', fill: '#e94560', fontStyle: 'bold',
+        fontFamily: 'Arial, sans-serif',
+      }).setOrigin(0.5).setAlpha(0);
+
+      this.tweens.add({
+        targets: highLabel,
+        alpha: 1, scaleX: 1.1, scaleY: 1.1,
+        duration: 500,
+        delay: 800,
+        ease: 'Back.easeOut',
+        yoyo: true,
+        hold: 400,
+        repeat: 1,
+        onComplete: () => {
+          highLabel.setAlpha(1).setScale(1);
+        },
+      });
+      yOffset += 40;
+    } else {
+      // Show existing high score for reference
+      const hi = loadHighScore();
+      if (hi > 0) {
+        this.add.text(W / 2, yOffset, 'High Score: ' + hi, {
+          fontSize: '18px', fill: '#888888',
+          fontFamily: 'Arial, sans-serif',
+        }).setOrigin(0.5);
+        yOffset += 32;
+      }
+    }
+
+    // ---- Easter egg message ----
+    const easterEgg = EASTER_EGG_SCORES.find(s => s === this.finalScore);
+    if (easterEgg !== undefined) {
+      const msg = EASTER_EGG_MESSAGES[easterEgg] || '';
+      if (msg) {
+        const eggText = this.add.text(W / 2, yOffset + 16, msg, {
+          fontSize: '22px', fill: '#0f3460', fontStyle: 'italic',
+          fontFamily: 'Georgia, serif',
+          align: 'center',
+          wordWrap: { width: W * 0.8 },
+        }).setOrigin(0.5).setAlpha(0);
+
+        this.tweens.add({
+          targets: eggText,
+          alpha: 1,
+          y: eggText.y - 8,
+          duration: 700,
+          delay: 1200,
+          ease: 'Sine.easeOut',
+        });
+        yOffset += 50;
+      }
+    }
+
+    // ---- Buttons ----
+    const btnY = Math.max(yOffset + 60, H * 0.55);
+
+    // PLAY AGAIN
+    createButton(this, W / 2, btnY, 'PLAY AGAIN', '#e94560', () => {
+      triggerHaptic('medium');
+      this.scene.start('GameScene');
+    });
+
+    // SHARE
+    createButton(this, W / 2, btnY + 70, 'SHARE SCORE', '#0f3460', () => {
+      this.shareScore();
+    });
+
+    // ---- Paywall / Unlock button ----
+    if (!isProUnlocked()) {
+      const proBtn = createButton(this, W / 2, btnY + 145, 'UNLOCK MORE', '#333333', () => {
+        this.showPaywall();
+      }, { width: 200, height: 48 });
+
+      // Subtle label below
+      this.add.text(W / 2, btnY + 178, 'Remove ads & unlock themes', {
+        fontSize: '12px', fill: '#999999',
+        fontFamily: 'Arial, sans-serif',
+      }).setOrigin(0.5);
+    } else {
+      // Pro badge
+      this.add.text(W / 2, btnY + 150, 'PRO', {
+        fontSize: '14px', fill: '#e94560', fontStyle: 'bold',
+        fontFamily: 'monospace',
+      }).setOrigin(0.5).setAlpha(0.6);
+    }
+
+    // ---- Title link (small, bottom) ----
+    const homeText = this.add.text(W / 2, H * 0.95, '< back to title', {
+      fontSize: '16px', fill: '#aaaaaa',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    homeText.on('pointerdown', () => {
+      this.scene.start('TitleScene');
+    });
+  }
+
+  shareScore() {
+    const text = 'I scored ' + this.finalScore + ' in 42? Can you beat it?';
+    // Try Web Share API first (mobile), fall back to clipboard
+    if (navigator.share) {
+      navigator.share({ title: '42?', text: text }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showToast('Copied to clipboard!');
+      }).catch(() => {
+        this.showToast('Share: ' + text);
+      });
+    } else {
+      this.showToast(text);
+    }
+    triggerHaptic('light');
+  }
+
+  showToast(msg) {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const toast = this.add.text(W / 2, H * 0.88, msg, {
+      fontSize: '16px', fill: '#ffffff', backgroundColor: '#333333',
+      padding: { x: 16, y: 10 },
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({
+      targets: toast,
+      alpha: 1,
+      duration: 300,
+      yoyo: true,
+      hold: 1800,
+      onComplete: () => toast.destroy(),
+    });
+  }
+
+  showPaywall() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // Dim overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, W, H);
+    overlay.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, W, H),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    // Paywall card
+    const cardW = W * 0.85;
+    const cardH = 300;
+    const cardX = W / 2 - cardW / 2;
+    const cardY = H / 2 - cardH / 2;
+
+    const card = this.add.graphics();
+    card.fillStyle(0xffffff, 1);
+    card.fillRoundedRect(cardX, cardY, cardW, cardH, 20);
+
+    this.add.text(W / 2, cardY + 36, '42? PRO', {
+      fontSize: '30px', fill: '#e94560', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5);
+
+    this.add.text(W / 2, cardY + 80, 'Remove ads\nUnlock color themes\nExtra game modes', {
+      fontSize: '18px', fill: '#333333', align: 'center',
+      lineSpacing: 8,
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5);
+
+    if (ALPHA_MODE) {
+      // In alpha, let testers unlock for free
+      createButton(this, W / 2, cardY + 170, 'UNLOCK (FREE ALPHA)', '#e94560', () => {
+        unlockPro();
+        // Remove overlay and refresh
+        overlay.destroy();
+        card.destroy();
+        this.scene.restart({ score: this.finalScore });
+      }, { width: 260 });
+
+      this.add.text(W / 2, cardY + 210, 'Free during alpha testing', {
+        fontSize: '12px', fill: '#999999', fontStyle: 'italic',
+        fontFamily: 'Arial, sans-serif',
+      }).setOrigin(0.5);
+    } else {
+      createButton(this, W / 2, cardY + 170, 'COMING SOON', '#cccccc', () => {
+        // No-op in non-alpha release without payment integration
+      }, { width: 220, textColor: '#666666' });
+    }
+
+    // Close / dismiss
+    const closeText = this.add.text(W / 2, cardY + cardH - 24, 'Maybe later', {
+      fontSize: '15px', fill: '#aaaaaa',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    closeText.on('pointerdown', () => {
+      overlay.destroy();
+      card.destroy();
+      closeText.destroy();
+    });
   }
 }
 
 class SettingsScene extends Phaser.Scene {
   constructor() { super('SettingsScene'); }
+
   create() {
-    this.add.text(
-      this.scale.width / 2, this.scale.height / 2,
-      'Settings Scene\n(placeholder)',
-      { fontSize: '32px', fill: '#fff', align: 'center' }
-    ).setOrigin(0.5);
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    this.settings = loadSettings();
+
+    // ---- Background ----
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ---- Title ----
+    this.add.text(W / 2, H * 0.10, 'SETTINGS', {
+      fontSize: '40px', fill: '#e94560', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5);
+
+    // ---- Toggles ----
+    this.createToggle(W / 2, H * 0.28, 'Sound', this.settings.sfx, (val) => {
+      this.settings.sfx = val;
+      saveSettings(this.settings);
+    });
+
+    this.createToggle(W / 2, H * 0.40, 'Haptics', this.settings.haptics, (val) => {
+      this.settings.haptics = val;
+      saveSettings(this.settings);
+      if (val) triggerHaptic('medium'); // confirm haptics work
+    });
+
+    // ---- Divider ----
+    const divider = this.add.graphics();
+    divider.lineStyle(1, 0x333355, 0.5);
+    divider.lineBetween(W * 0.15, H * 0.52, W * 0.85, H * 0.52);
+
+    // ---- Reset high score ----
+    const resetText = this.add.text(W / 2, H * 0.60, 'Reset High Score', {
+      fontSize: '20px', fill: '#666688',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    resetText.on('pointerdown', () => {
+      if (this.confirmingReset) {
+        // Second tap: actually reset
+        try { localStorage.removeItem(STORAGE_KEY_HIGH); } catch (e) {}
+        resetText.setText('Score reset!');
+        resetText.setFill('#e94560');
+        this.confirmingReset = false;
+        triggerHaptic('heavy');
+        this.time.delayedCall(1500, () => {
+          resetText.setText('Reset High Score');
+          resetText.setFill('#666688');
+        });
+      } else {
+        // First tap: ask for confirmation
+        resetText.setText('Tap again to confirm');
+        resetText.setFill('#ff6666');
+        this.confirmingReset = true;
+        triggerHaptic('light');
+        // Auto-cancel after 3 seconds
+        this.time.delayedCall(3000, () => {
+          if (this.confirmingReset) {
+            this.confirmingReset = false;
+            resetText.setText('Reset High Score');
+            resetText.setFill('#666688');
+          }
+        });
+      }
+    });
+
+    // ---- Version info ----
+    this.add.text(W / 2, H * 0.68, 'v0.1.0' + (ALPHA_MODE ? ' (Alpha)' : ''), {
+      fontSize: '14px', fill: '#444466', fontStyle: 'italic',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    // ---- Back button ----
+    createButton(this, W / 2, H * 0.82, 'BACK', '#0f3460', () => {
+      this.scene.start('TitleScene');
+    });
+  }
+
+  createToggle(x, y, label, initialValue, onChange) {
+    const W = this.scale.width;
+
+    // Label text (left-aligned)
+    this.add.text(W * 0.15, y, label, {
+      fontSize: '24px', fill: '#ccccdd',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0, 0.5);
+
+    // Toggle track
+    const trackW = 60;
+    const trackH = 32;
+    const trackX = W * 0.75;
+    const trackR = trackH / 2;
+
+    const track = this.add.graphics();
+    const thumb = this.add.circle(0, y, 13, 0xffffff);
+
+    let isOn = initialValue;
+
+    const drawState = () => {
+      track.clear();
+      if (isOn) {
+        track.fillStyle(0xe94560, 1);
+      } else {
+        track.fillStyle(0x333355, 1);
+      }
+      track.fillRoundedRect(trackX - trackW / 2, y - trackH / 2, trackW, trackH, trackR);
+      thumb.x = isOn ? trackX + trackW / 2 - 16 : trackX - trackW / 2 + 16;
+    };
+
+    drawState();
+
+    // Hit zone for the toggle
+    const hitZone = this.add.zone(trackX, y, trackW + 20, trackH + 20)
+      .setInteractive({ useHandCursor: true });
+
+    hitZone.on('pointerdown', () => {
+      isOn = !isOn;
+      // Animate thumb
+      this.tweens.add({
+        targets: thumb,
+        x: isOn ? trackX + trackW / 2 - 16 : trackX - trackW / 2 + 16,
+        duration: 150,
+        ease: 'Cubic.easeOut',
+      });
+      // Redraw track after a tick so it looks smooth
+      this.time.delayedCall(50, () => drawState());
+      triggerHaptic('light');
+      onChange(isOn);
+    });
   }
 }
 
