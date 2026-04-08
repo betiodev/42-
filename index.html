@@ -188,7 +188,62 @@ function loadSettings() {
 }
 
 // ============================================================
-//  SCENES (empty stubs — fleshed out in Parts 2 & 3)
+//  DAILY PLAY LIMIT
+// ============================================================
+const DAILY_PLAY_LIMIT = 20;
+const STORAGE_KEY_DAILY = '42game_daily';
+
+function getDailyPlayCount() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY_DAILY) || '{}');
+    const today = new Date().toISOString().slice(0, 10);
+    if (data.date !== today) return 0;
+    return data.count || 0;
+  } catch (e) { return 0; }
+}
+
+function incrementDailyPlayCount() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY_DAILY) || '{}');
+    if (data.date !== today) {
+      localStorage.setItem(STORAGE_KEY_DAILY, JSON.stringify({ date: today, count: 1 }));
+    } else {
+      data.count = (data.count || 0) + 1;
+      localStorage.setItem(STORAGE_KEY_DAILY, JSON.stringify(data));
+    }
+  } catch (e) {}
+}
+
+// ============================================================
+//  AUDIO (Web Audio API beeps — no asset files needed)
+// ============================================================
+let audioCtx = null;
+
+function playBeep(freq, duration, type) {
+  const s = loadSettings();
+  if (!s.sfx) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = type || 'sine';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (e) {}
+}
+
+// Head-start flag (set by TitleScene 42-tap easter egg)
+let titleEasterEggFound = false;
+
+// ============================================================
+//  SCENES
 // ============================================================
 class TitleScene extends Phaser.Scene {
   constructor() { super('TitleScene'); }
@@ -297,10 +352,11 @@ class TitleScene extends Phaser.Scene {
         },
       });
 
-      // 42 taps on the dot = secret message
+      // 42 taps on the dot = secret message + head-start flag
       if (this.dotTapCount === 42) {
+        titleEasterEggFound = true;
         triggerHaptic('heavy');
-        const secret = this.add.text(W / 2, H * 0.52, 'You found the answer.', {
+        const secret = this.add.text(W / 2, H * 0.52, 'You found the answer.\nHead start unlocked!', {
           fontSize: '22px', fill: '#e94560', fontStyle: 'italic',
           fontFamily: 'Georgia, serif',
         }).setOrigin(0.5).setAlpha(0);
@@ -347,12 +403,516 @@ class TitleScene extends Phaser.Scene {
 
 class GameScene extends Phaser.Scene {
   constructor() { super('GameScene'); }
+
   create() {
-    this.add.text(
-      this.scale.width / 2, this.scale.height / 2,
-      'Game Scene\n(placeholder)',
-      { fontSize: '32px', fill: '#fff', align: 'center' }
-    ).setOrigin(0.5);
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // ---- Background ----
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
+    bg.fillRect(0, 0, W, H);
+
+    // ---- Game state ----
+    this.score = titleEasterEggFound ? 11 : 0;
+    this.gameActive = true;
+    this.isPaused = false;
+    this.currentDotSize = DOT_START_SIZE;
+    this.currentSpawnInterval = TIMER_SPAWN_INTERVAL;
+    this.timeRemaining = TIMER_GAME_DURATION;
+    this.lastDotPos = null;
+    this.totalTaps = 0;
+    this.currentDot = null;
+    this.isCurrentDotRed = false;
+    this.is42RedDot = false;
+    this.redDot42Done = false;
+    this.spawnsSinceLastRed = 0;
+
+    // ---- Daily play limit ----
+    if (!ALPHA_MODE) {
+      const plays = getDailyPlayCount();
+      if (plays >= DAILY_PLAY_LIMIT) {
+        this.gameActive = false;
+        this.add.text(W / 2, H * 0.38, 'Daily limit reached!', {
+          fontSize: '34px', fill: '#e94560', fontStyle: 'bold',
+          fontFamily: 'Arial Black, sans-serif',
+        }).setOrigin(0.5);
+        this.add.text(W / 2, H * 0.46, 'Come back tomorrow\nfor more games.', {
+          fontSize: '20px', fill: '#777799', align: 'center',
+          fontFamily: 'Arial, sans-serif',
+        }).setOrigin(0.5);
+        createButton(this, W / 2, H * 0.60, 'BACK', '#0f3460', () => {
+          this.scene.start('TitleScene');
+        });
+        return;
+      }
+    }
+    incrementDailyPlayCount();
+
+    // ---- Timer bar (top of screen) ----
+    this.timerBarBg = this.add.graphics();
+    this.timerBarBg.fillStyle(0x333355, 1);
+    this.timerBarBg.fillRect(0, 0, W, 8);
+    this.timerBar = this.add.graphics();
+    this.updateTimerBar();
+
+    // ---- Score text ----
+    this.scoreText = this.add.text(W / 2, 46, '' + this.score, {
+      fontSize: '52px', fill: '#ffffff', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5);
+
+    // ---- Time remaining text ----
+    this.timeText = this.add.text(W / 2, 84, '42.0s', {
+      fontSize: '18px', fill: '#777799',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    // ---- Head start indicator ----
+    if (titleEasterEggFound) {
+      const hsText = this.add.text(W / 2, 116, 'Head Start +11', {
+        fontSize: '18px', fill: '#e94560', fontStyle: 'italic',
+        fontFamily: 'Georgia, serif',
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({
+        targets: hsText, alpha: 1,
+        duration: 400, yoyo: true, hold: 2000,
+        onComplete: () => hsText.destroy(),
+      });
+      titleEasterEggFound = false; // consume the flag
+    }
+
+    // ---- Spawn first dot ----
+    this.spawnDot();
+    this.resetSpawnTimer();
+
+    // ---- Page Visibility API ----
+    this.boundVisHandler = this.handleVisibility.bind(this);
+    document.addEventListener('visibilitychange', this.boundVisHandler);
+  }
+
+  // ================================================================
+  //  UPDATE LOOP
+  // ================================================================
+  update(time, delta) {
+    if (!this.gameActive || this.isPaused) return;
+
+    this.timeRemaining -= delta;
+    if (this.timeRemaining <= 0) {
+      this.timeRemaining = 0;
+      this.updateTimerBar();
+      this.endGame();
+      return;
+    }
+    this.updateTimerBar();
+    this.timeText.setText((this.timeRemaining / 1000).toFixed(1) + 's');
+  }
+
+  // ================================================================
+  //  TIMER BAR
+  // ================================================================
+  updateTimerBar() {
+    const W = this.scale.width;
+    const ratio = Math.max(0, this.timeRemaining / TIMER_GAME_DURATION);
+    this.timerBar.clear();
+
+    let color;
+    if (ratio <= 0.2)      color = 0xff3333;   // red
+    else if (ratio <= 0.4) color = 0xffaa33;   // orange warning
+    else                   color = 0xe94560;   // normal
+
+    this.timerBar.fillStyle(color, 1);
+    this.timerBar.fillRect(0, 0, W * ratio, 8);
+  }
+
+  // ================================================================
+  //  DOT SPAWNING
+  // ================================================================
+  getValidPosition() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const margin = 0.10;
+    const pad = this.currentDotSize;
+    const minX = W * margin + pad;
+    const maxX = W * (1 - margin) - pad;
+    const minY = H * margin + pad + 110; // clear the HUD
+    const maxY = H * (1 - margin) - pad;
+    const minDist = Math.min(W, H) * 0.30;
+
+    for (let a = 0; a < 50; a++) {
+      const x = Phaser.Math.Between(minX, maxX);
+      const y = Phaser.Math.Between(minY, maxY);
+      if (this.lastDotPos) {
+        const d = Phaser.Math.Distance.Between(x, y, this.lastDotPos.x, this.lastDotPos.y);
+        if (d < minDist) continue;
+      }
+      return { x, y };
+    }
+    return { x: Phaser.Math.Between(minX, maxX), y: Phaser.Math.Between(minY, maxY) };
+  }
+
+  spawnDot() {
+    if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
+
+    // ---- Decide if red dot ----
+    this.isCurrentDotRed = false;
+    this.is42RedDot = false;
+
+    if (this.score >= 42 && !this.redDot42Done) {
+      // Special 42 red dot
+      this.isCurrentDotRed = true;
+      this.is42RedDot = true;
+    } else if (this.redDot42Done) {
+      // Frequency-phase red dots
+      this.spawnsSinceLastRed++;
+      const freq = this.getRedDotFrequency();
+      if (this.spawnsSinceLastRed >= freq) {
+        this.isCurrentDotRed = true;
+        this.spawnsSinceLastRed = 0;
+      }
+    }
+
+    // ---- Create the dot ----
+    const pos = this.getValidPosition();
+    this.lastDotPos = pos;
+
+    const fill = this.isCurrentDotRed ? 0xff0000 : 0xffffff;
+    this.currentDot = this.add.circle(pos.x, pos.y, this.currentDotSize, fill);
+    this.currentDot.setInteractive({ useHandCursor: true });
+
+    // Pop-in entrance
+    this.currentDot.setScale(0);
+    this.tweens.add({
+      targets: this.currentDot,
+      scaleX: 1, scaleY: 1,
+      duration: 150, ease: 'Back.easeOut',
+    });
+
+    // ---- 42 red dot: 3-second lifespan, pause spawn timer ----
+    if (this.is42RedDot) {
+      if (this.spawnTimer) this.spawnTimer.remove();
+      this.redDotExpireTimer = this.time.delayedCall(3000, () => {
+        if (this.isCurrentDotRed && this.is42RedDot) {
+          this.redDot42Done = true;
+          this.is42RedDot = false;
+          this.spawnDot();
+          this.resetSpawnTimer();
+        }
+      });
+    }
+
+    // ---- Tap handler ----
+    this.currentDot.on('pointerdown', (pointer) => {
+      if (!this.gameActive || this.isPaused) return;
+      this.onDotTap(pointer);
+    });
+  }
+
+  getRedDotFrequency() {
+    if (this.score < 60)  return 10;
+    if (this.score < 80)  return 7;
+    if (this.score < 100) return 5;
+    return 3;
+  }
+
+  resetSpawnTimer() {
+    if (this.spawnTimer) this.spawnTimer.remove();
+    this.spawnTimer = this.time.addEvent({
+      delay: this.currentSpawnInterval,
+      callback: () => {
+        if (!this.gameActive || this.isPaused || this.is42RedDot) return;
+        this.spawnDot();
+        this.resetSpawnTimer();
+      },
+    });
+  }
+
+  // ================================================================
+  //  TAP HANDLING
+  // ================================================================
+  onDotTap(pointer) {
+    const dotX = this.currentDot.x;
+    const dotY = this.currentDot.y;
+    const dotSize = this.currentDotSize;
+
+    // ---- Red dot tap ----
+    if (this.isCurrentDotRed) {
+      this.onRedDotTap(dotX, dotY);
+      return;
+    }
+
+    // ---- Normal tap ----
+    // Two-finger detection: award 2 points
+    const p1 = this.input.pointer1;
+    const p2 = this.input.pointer2;
+    const twoFinger = p1 && p2 && p1.isDown && p2.isDown;
+    const points = twoFinger ? 2 : SCORE_PER_TAP;
+
+    this.score += points;
+    this.totalTaps++;
+
+    // Update score display with pop
+    this.scoreText.setText('' + this.score);
+    this.tweens.add({
+      targets: this.scoreText,
+      scaleX: 1.2, scaleY: 1.2,
+      duration: 80, yoyo: true, ease: 'Cubic.easeOut',
+    });
+
+    // Floating "+N" text
+    const plusText = this.add.text(dotX, dotY - 20, '+' + points, {
+      fontSize: '28px', fill: twoFinger ? '#ffff00' : '#ffffff',
+      fontStyle: 'bold', fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: plusText,
+      y: plusText.y - 60, alpha: 0,
+      duration: 600,
+      onComplete: () => plusText.destroy(),
+    });
+
+    // Ripple effect (direction depends on size)
+    this.createRipple(dotX, dotY, dotSize);
+
+    // Sound (pitch rises with score) & haptics
+    playBeep(500 + Math.min(this.score * 3, 800), 0.12, 'sine');
+    triggerHaptic(twoFinger ? 'medium' : 'light');
+
+    // Progressive difficulty
+    this.applyDifficultyReduction();
+
+    // Respawn
+    this.spawnDot();
+    this.resetSpawnTimer();
+  }
+
+  onRedDotTap(x, y) {
+    // ---- The 42 special: sky explosion & lose ----
+    if (this.is42RedDot) {
+      this.redDot42Done = true;
+      this.is42RedDot = false;
+      if (this.redDotExpireTimer) this.redDotExpireTimer.remove();
+      triggerHaptic('heavy');
+      playBeep(100, 0.5, 'sawtooth');
+      this.skyExplosion(x, y);
+      return;
+    }
+
+    // ---- Regular red dot after 42: penalty ----
+    this.score = Math.max(0, this.score - 5);
+    this.scoreText.setText('' + this.score);
+    triggerHaptic('heavy');
+    playBeep(150, 0.3, 'square');
+
+    // Red flash
+    const flash = this.add.graphics();
+    flash.fillStyle(0xff0000, 0.3);
+    flash.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.tweens.add({
+      targets: flash, alpha: 0, duration: 300,
+      onComplete: () => flash.destroy(),
+    });
+
+    // Floating "-5"
+    const penText = this.add.text(x, y, '-5', {
+      fontSize: '32px', fill: '#ff0000', fontStyle: 'bold',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: penText,
+      y: penText.y - 60, alpha: 0, duration: 600,
+      onComplete: () => penText.destroy(),
+    });
+
+    this.spawnDot();
+    this.resetSpawnTimer();
+  }
+
+  // ================================================================
+  //  RIPPLE EFFECTS
+  // ================================================================
+  createRipple(x, y, size) {
+    if (size > 39) {
+      // Inward ripple: large ring shrinks to centre
+      const ring = this.add.circle(x, y, size * 2);
+      ring.setStrokeStyle(3, 0xffffff, 0.7);
+      ring.setFillStyle(0, 0);
+      this.tweens.add({
+        targets: ring,
+        scaleX: 0, scaleY: 0, alpha: 0,
+        duration: 350, ease: 'Cubic.easeIn',
+        onComplete: () => ring.destroy(),
+      });
+    } else {
+      // Outward pop: small ring expands outward
+      const ring = this.add.circle(x, y, size);
+      ring.setStrokeStyle(3, 0xffffff, 0.7);
+      ring.setFillStyle(0, 0);
+      ring.setScale(0.5);
+      this.tweens.add({
+        targets: ring,
+        scaleX: 2.5, scaleY: 2.5, alpha: 0,
+        duration: 350, ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+  }
+
+  // ================================================================
+  //  PROGRESSIVE DIFFICULTY
+  // ================================================================
+  applyDifficultyReduction() {
+    // 0.5 % reduction per tap, clamped to floors
+    this.currentDotSize = Math.max(44, this.currentDotSize * 0.995);
+    this.currentSpawnInterval = Math.max(400, this.currentSpawnInterval * 0.995);
+  }
+
+  // ================================================================
+  //  SKY EXPLOSION (lose-at-42)
+  // ================================================================
+  skyExplosion(cx, cy) {
+    this.gameActive = false;
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // Remove game elements
+    if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
+    if (this.spawnTimer)  { this.spawnTimer.remove(); }
+
+    // Screen shake
+    this.cameras.main.shake(900, 0.035);
+
+    // 35 expanding particles
+    const colors = [0xff0000, 0xff3300, 0xff6600, 0xff9900, 0xffcc00, 0xffff00, 0xffffff];
+    for (let i = 0; i < 35; i++) {
+      const angle = (i / 35) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.15, 0.15);
+      const speed = Phaser.Math.Between(120, 420);
+      const col = colors[i % colors.length];
+      const r = Phaser.Math.Between(5, 22);
+
+      const p = this.add.circle(cx, cy, r, col).setAlpha(0.9);
+      this.tweens.add({
+        targets: p,
+        x: cx + Math.cos(angle) * speed,
+        y: cy + Math.sin(angle) * speed,
+        scaleX: Phaser.Math.FloatBetween(0.1, 0.4),
+        scaleY: Phaser.Math.FloatBetween(0.1, 0.4),
+        alpha: 0,
+        duration: Phaser.Math.Between(600, 1600),
+        ease: 'Cubic.easeOut',
+        onComplete: () => p.destroy(),
+      });
+    }
+
+    // White flash
+    const flash = this.add.graphics();
+    flash.fillStyle(0xffffff, 1);
+    flash.fillRect(0, 0, W, H);
+    flash.setAlpha(0);
+    this.tweens.add({
+      targets: flash,
+      alpha: { from: 0, to: 0.85 },
+      duration: 350, delay: 250,
+      yoyo: true, hold: 200,
+      onComplete: () => flash.destroy(),
+    });
+
+    // Dramatic "42!" text
+    const txt = this.add.text(W / 2, H / 2, '42!', {
+      fontSize: '120px', fill: '#ff0000', fontStyle: 'bold',
+      fontFamily: 'Arial Black, Impact, sans-serif',
+    }).setOrigin(0.5).setAlpha(0).setScale(0.1);
+
+    this.tweens.add({
+      targets: txt,
+      alpha: 1, scaleX: 1.5, scaleY: 1.5,
+      duration: 600, delay: 200, ease: 'Back.easeOut',
+    });
+
+    // Low rumble sound
+    playBeep(60, 1.0, 'sawtooth');
+    this.time.delayedCall(400, () => playBeep(45, 0.8, 'sawtooth'));
+
+    // Transition to game over
+    this.time.delayedCall(2500, () => {
+      this.cleanup();
+      this.scene.start('GameOverScene', { score: this.score });
+    });
+  }
+
+  // ================================================================
+  //  GAME END (timer expired)
+  // ================================================================
+  endGame() {
+    this.gameActive = false;
+    if (this.spawnTimer) this.spawnTimer.remove();
+    if (this.redDotExpireTimer) this.redDotExpireTimer.remove();
+
+    // Final beep
+    playBeep(300, 0.4, 'triangle');
+
+    if (this.currentDot) {
+      this.tweens.add({
+        targets: this.currentDot,
+        scaleX: 0, scaleY: 0, alpha: 0,
+        duration: 300,
+        onComplete: () => {
+          this.cleanup();
+          this.scene.start('GameOverScene', { score: this.score });
+        },
+      });
+    } else {
+      this.cleanup();
+      this.scene.start('GameOverScene', { score: this.score });
+    }
+  }
+
+  // ================================================================
+  //  PAUSE / RESUME (Page Visibility API)
+  // ================================================================
+  handleVisibility() {
+    if (!this.gameActive) return;
+    if (document.hidden) this.pauseGame();
+    else this.resumeGame();
+  }
+
+  pauseGame() {
+    if (!this.gameActive || this.isPaused) return;
+    this.isPaused = true;
+    this.time.paused = true;
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    this.pauseOverlay = this.add.graphics();
+    this.pauseOverlay.fillStyle(0x000000, 0.7);
+    this.pauseOverlay.fillRect(0, 0, W, H);
+    this.pauseOverlay.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, W, H),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    this.pauseLabel = this.add.text(W / 2, H / 2, 'PAUSED\n\nTap to resume', {
+      fontSize: '34px', fill: '#ffffff', align: 'center',
+      fontFamily: 'Arial, sans-serif',
+    }).setOrigin(0.5);
+
+    this.pauseOverlay.on('pointerdown', () => this.resumeGame());
+  }
+
+  resumeGame() {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this.time.paused = false;
+    if (this.pauseOverlay) { this.pauseOverlay.destroy(); this.pauseOverlay = null; }
+    if (this.pauseLabel)   { this.pauseLabel.destroy();   this.pauseLabel = null; }
+  }
+
+  // ================================================================
+  //  CLEANUP
+  // ================================================================
+  cleanup() {
+    document.removeEventListener('visibilitychange', this.boundVisHandler);
   }
 }
 
