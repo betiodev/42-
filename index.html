@@ -107,17 +107,13 @@ function createButton(scene, x, y, label, color, callback, opts) {
   const W = (opts && opts.width) || 240;
   const H = (opts && opts.height) || 56;
   const R = 14;
-  const textColor = (opts && opts.textColor) || '#ffffff';
 
   const bg = scene.add.graphics();
-  const colorInt = (typeof color === 'string')
-    ? Phaser.Display.Color.HexStringToColor(color).color
-    : color;
-  bg.fillStyle(colorInt, 1);
-  bg.fillRoundedRect(x - W / 2, y - H / 2, W, H, R);
+  bg.lineStyle(1.5, 0xffffff, 1);
+  bg.strokeRoundedRect(x - W / 2, y - H / 2, W, H, R);
 
   const text = scene.add.text(x, y, label, {
-    fontSize: '24px', fill: textColor, fontStyle: 'bold',
+    fontSize: '24px', fill: '#ffffff', fontStyle: 'bold',
     fontFamily: 'Arial, sans-serif',
   }).setOrigin(0.5);
 
@@ -252,122 +248,57 @@ class TitleScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // ---- background gradient (top dark → bottom darker) ----
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
-    bg.fillRect(0, 0, W, H);
-
-    // ---- "42" large title ----
-    this.add.text(W / 2, H * 0.22, '42', {
-      fontSize: '130px',
+    // ---- "42?" title — single line, white ----
+    const title = this.add.text(W / 2, H * 0.30, '42?', {
+      fontSize: '96px',
       fontFamily: 'Arial Black, Impact, sans-serif',
-      fill: '#e94560',
+      fill: '#ffffff',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    // ---- "?" curve (upper part of question mark) ----
-    // We render "?" but overlay the dot with our own interactive circle
-    const qText = this.add.text(W / 2, H * 0.38, '?', {
-      fontSize: '110px',
-      fontFamily: 'Arial Black, Impact, sans-serif',
-      fill: '#e94560',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
+    // ---- Interactive dot (replaces the "?" period) ----
+    // Position at the "?" dot: right-of-centre, below baseline
+    const qDotX = title.x + title.displayWidth * 0.30;
+    const qDotY = title.y + title.displayHeight * 0.33;
+    const dotRadius = 8;
 
-    // ---- Interactive dot (the "." of the "?") ----
-    // Position at the bottom-center of the question mark glyph
-    const dotX = W / 2 + 2;
-    const dotY = qText.y + qText.displayHeight * 0.38;
-    const dotRadius = 14;
-
-    // Mask out the original dot with a small rectangle matching bg color
+    // Mask the original text dot with a black rect
     const mask = this.add.graphics();
-    mask.fillStyle(0x1a1a2e, 1);
-    mask.fillRect(dotX - 20, dotY - 18, 40, 36);
+    mask.fillStyle(0x000000, 1);
+    mask.fillRect(qDotX - 14, qDotY - 12, 28, 24);
 
-    // The tappable dot
-    this.dot = this.add.circle(dotX, dotY, dotRadius, 0xffffff);
+    // Small white dot — no permanent animation, no glow
+    this.dot = this.add.circle(qDotX, qDotY, dotRadius, 0xffffff);
     this.dot.setInteractive({ useHandCursor: true });
 
-    // Subtle glow ring behind the dot
-    this.glowRing = this.add.circle(dotX, dotY, dotRadius + 8);
-    this.glowRing.setStrokeStyle(3, 0xe94560, 0.4);
-    this.glowRing.setFillStyle(0, 0); // transparent fill
-
-    // Pulse animation
-    this.tweens.add({
-      targets: [this.glowRing],
-      scaleX: 1.6,
-      scaleY: 1.6,
-      alpha: 0,
-      duration: 1200,
-      repeat: -1,
-      ease: 'Sine.easeOut',
-    });
-    this.tweens.add({
-      targets: this.dot,
-      scaleX: 1.15,
-      scaleY: 1.15,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    // ---- Dot tap: blink easter egg ----
+    // ---- Dot tap: single quick blink only ----
     this.dotTapCount = 0;
     this.dot.on('pointerdown', () => {
       this.dotTapCount++;
       triggerHaptic('medium');
 
-      // Color-cycle blink
+      // Single quick blink: pop up and settle
       this.tweens.killTweensOf(this.dot);
-      const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
-      let i = 0;
-      this.dot.setScale(2);
-      this.dot.setFillStyle(colors[0]);
-
-      const blinkEvent = this.time.addEvent({
-        delay: 60,
-        repeat: colors.length - 1,
-        callback: () => {
-          i++;
-          if (i < colors.length) {
-            this.dot.setFillStyle(colors[i]);
-          }
-          if (i >= colors.length - 1) {
-            // Restore
-            this.dot.setFillStyle(0xffffff);
-            this.dot.setScale(1);
-            this.tweens.add({
-              targets: this.dot,
-              scaleX: 1.15,
-              scaleY: 1.15,
-              duration: 800,
-              yoyo: true,
-              repeat: -1,
-              ease: 'Sine.easeInOut',
-            });
-          }
-        },
+      this.dot.setScale(2.5);
+      this.tweens.add({
+        targets: this.dot,
+        scaleX: 1, scaleY: 1,
+        duration: 180, ease: 'Cubic.easeOut',
       });
 
-      // 42 taps on the dot = secret message + head-start flag
+      // 42 taps = secret message + head-start flag
       if (this.dotTapCount === 42) {
         titleEasterEggFound = true;
         triggerHaptic('heavy');
-        const secret = this.add.text(W / 2, H * 0.52, 'You found the answer.\nHead start unlocked!', {
-          fontSize: '22px', fill: '#e94560', fontStyle: 'italic',
-          fontFamily: 'Georgia, serif',
+        const secret = this.add.text(W / 2, H * 0.45, 'You found the answer.\nHead start unlocked!', {
+          fontSize: '20px', fill: '#ffffff', fontStyle: 'italic',
+          fontFamily: 'Georgia, serif', align: 'center',
         }).setOrigin(0.5).setAlpha(0);
-
         this.tweens.add({
           targets: secret,
           alpha: 1, y: secret.y - 10,
-          duration: 600,
-          ease: 'Back.easeOut',
-          yoyo: true,
-          hold: 2000,
+          duration: 600, ease: 'Back.easeOut',
+          yoyo: true, hold: 2000,
           onComplete: () => secret.destroy(),
         });
       }
@@ -376,27 +307,27 @@ class TitleScene extends Phaser.Scene {
     // ---- High score display ----
     const hi = loadHighScore();
     if (hi > 0) {
-      this.add.text(W / 2, H * 0.56, 'HIGH SCORE: ' + hi, {
-        fontSize: '20px', fill: '#555580',
+      this.add.text(W / 2, H * 0.50, 'HIGH SCORE: ' + hi, {
+        fontSize: '20px', fill: '#ffffff',
         fontFamily: 'Arial, sans-serif',
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setAlpha(0.4);
     }
 
     // ---- Buttons ----
-    createButton(this, W / 2, H * 0.70, 'START', '#e94560', () => {
+    createButton(this, W / 2, H * 0.68, 'START', null, () => {
       this.scene.start('GameScene');
     });
 
-    createButton(this, W / 2, H * 0.80, 'SETTINGS', '#0f3460', () => {
+    createButton(this, W / 2, H * 0.78, 'SETTINGS', null, () => {
       this.scene.start('SettingsScene');
     });
 
     // ---- Alpha badge ----
     if (ALPHA_MODE) {
       this.add.text(W - 12, 12, 'ALPHA', {
-        fontSize: '13px', fill: '#ff6600', fontStyle: 'bold',
+        fontSize: '13px', fill: '#ffffff', fontStyle: 'bold',
         fontFamily: 'monospace',
-      }).setOrigin(1, 0).setAlpha(0.7);
+      }).setOrigin(1, 0).setAlpha(0.3);
     }
   }
 }
@@ -407,11 +338,6 @@ class GameScene extends Phaser.Scene {
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
-
-    // ---- Background ----
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
-    bg.fillRect(0, 0, W, H);
 
     // ---- Game state ----
     this.score = titleEasterEggFound ? 11 : 0;
@@ -434,11 +360,11 @@ class GameScene extends Phaser.Scene {
       if (plays >= DAILY_PLAY_LIMIT) {
         this.gameActive = false;
         this.add.text(W / 2, H * 0.38, 'Daily limit reached!', {
-          fontSize: '34px', fill: '#e94560', fontStyle: 'bold',
+          fontSize: '34px', fill: '#ffffff', fontStyle: 'bold',
           fontFamily: 'Arial Black, sans-serif',
         }).setOrigin(0.5);
         this.add.text(W / 2, H * 0.46, 'Come back tomorrow\nfor more games.', {
-          fontSize: '20px', fill: '#777799', align: 'center',
+          fontSize: '20px', fill: '#ffffff', align: 'center',
           fontFamily: 'Arial, sans-serif',
         }).setOrigin(0.5);
         createButton(this, W / 2, H * 0.60, 'BACK', '#0f3460', () => {
@@ -451,7 +377,7 @@ class GameScene extends Phaser.Scene {
 
     // ---- Timer bar (top of screen) ----
     this.timerBarBg = this.add.graphics();
-    this.timerBarBg.fillStyle(0x333355, 1);
+    this.timerBarBg.fillStyle(0x222222, 1);
     this.timerBarBg.fillRect(0, 0, W, 8);
     this.timerBar = this.add.graphics();
     this.updateTimerBar();
@@ -464,14 +390,14 @@ class GameScene extends Phaser.Scene {
 
     // ---- Time remaining text ----
     this.timeText = this.add.text(W / 2, 84, '42.0s', {
-      fontSize: '18px', fill: '#777799',
+      fontSize: '18px', fill: '#ffffff',
       fontFamily: 'monospace',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setAlpha(0.5);
 
     // ---- Head start indicator ----
     if (titleEasterEggFound) {
       const hsText = this.add.text(W / 2, 116, 'Head Start +11', {
-        fontSize: '18px', fill: '#e94560', fontStyle: 'italic',
+        fontSize: '18px', fill: '#ffffff', fontStyle: 'italic',
         fontFamily: 'Georgia, serif',
       }).setOrigin(0.5).setAlpha(0);
       this.tweens.add({
@@ -517,9 +443,8 @@ class GameScene extends Phaser.Scene {
     this.timerBar.clear();
 
     let color;
-    if (ratio <= 0.2)      color = 0xff3333;   // red
-    else if (ratio <= 0.4) color = 0xffaa33;   // orange warning
-    else                   color = 0xe94560;   // normal
+    if (ratio <= 0.2)      color = 0xff3333;   // red warning
+    else                   color = 0xffffff;   // white
 
     this.timerBar.fillStyle(color, 1);
     this.timerBar.fillRect(0, 0, W * ratio, 8);
@@ -1312,7 +1237,7 @@ const config = {
     height: 844,         // iPhone 14 logical height
     parent: document.body,
   },
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#000000',
   scene: [TitleScene, GameScene, GameOverScene, SettingsScene],
   input: {
     activePointers: 3,   // Support multi-touch
