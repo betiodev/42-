@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>42?</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+    }
+    canvas { display: block; margin: 0 auto; }
+  </style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+
+<script>
+// ============================================================
+//  GAME CONSTANTS
+// ============================================================
+const ALPHA_MODE = true;                 // Feature-flag for alpha builds
+
+// Dot
+const DOT_START_SIZE       = 80;         // Starting radius of the dot (px)
+const DOT_MIN_SIZE         = 10;         // Floor: smallest the dot can shrink to
+const DOT_REDUCTION_TAP    = 4;          // Shrink per tap
+const DOT_REDUCTION_IDLE   = 1;          // Shrink per idle tick
+
+// Timers (ms)
+const TIMER_GAME_DURATION  = 42000;      // Total round length
+const TIMER_IDLE_INTERVAL  = 500;        // How often the idle-shrink fires
+const TIMER_SPAWN_INTERVAL = 3000;       // Dot respawn / reposition interval
+
+// Scoring
+const SCORE_PER_TAP        = 1;          // Points awarded per successful tap
+
+// Growth / shrink rates
+const DOT_GROWTH_ON_TAP    = 6;          // Dot grows back a bit on hit
+const DOT_GROWTH_FLOOR     = DOT_START_SIZE;  // Max size after growth
+const DOT_GROWTH_MIN       = DOT_MIN_SIZE;    // Min size floor
+
+// Easter-egg score triggers (checked in order, first match wins)
+const EASTER_EGG_SCORES = [
+  42,    // "The Answer"
+  69,    // nice
+  100,   // Century club
+  142,   // 100 + 42
+  256,   // Power of 2
+  314,   // Pi day
+  420,   // Blaze it
+  666,   // Number of the beast
+  777,   // Jackpot
+  1000,  // Grand
+  1337,  // Leet
+  4200,  // 42 * 100
+];
+
+// ============================================================
+//  LOCALSTORAGE HELPERS
+// ============================================================
+const STORAGE_KEY_HIGH = '42game_highscore';
+const STORAGE_KEY_SETTINGS = '42game_settings';
+
+function saveHighScore(score) {
+  try {
+    const current = loadHighScore();
+    if (score > current) {
+      localStorage.setItem(STORAGE_KEY_HIGH, JSON.stringify(score));
+      return true; // new record
+    }
+    return false;
+  } catch (e) {
+    console.warn('localStorage unavailable', e);
+    return false;
+  }
+}
+
+function loadHighScore() {
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_HIGH);
+    return val ? JSON.parse(val) : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function saveSettings(settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('localStorage unavailable', e);
+  }
+}
+
+function loadSettings() {
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_SETTINGS);
+    return val ? JSON.parse(val) : { sfx: true, music: true };
+  } catch (e) {
+    return { sfx: true, music: true };
+  }
+}
+
+// ============================================================
+//  SCENES (empty stubs — fleshed out in Parts 2 & 3)
+// ============================================================
+class TitleScene extends Phaser.Scene {
+  constructor() { super('TitleScene'); }
+  create() {
+    this.add.text(
+      this.scale.width / 2, this.scale.height / 2,
+      '42?\nTitle Scene\n(placeholder)',
+      { fontSize: '32px', fill: '#fff', align: 'center' }
+    ).setOrigin(0.5);
+  }
+}
+
+class GameScene extends Phaser.Scene {
+  constructor() { super('GameScene'); }
+  create() {
+    this.add.text(
+      this.scale.width / 2, this.scale.height / 2,
+      'Game Scene\n(placeholder)',
+      { fontSize: '32px', fill: '#fff', align: 'center' }
+    ).setOrigin(0.5);
+  }
+}
+
+class GameOverScene extends Phaser.Scene {
+  constructor() { super('GameOverScene'); }
+  create() {
+    this.add.text(
+      this.scale.width / 2, this.scale.height / 2,
+      'Game Over Scene\n(placeholder)',
+      { fontSize: '32px', fill: '#fff', align: 'center' }
+    ).setOrigin(0.5);
+  }
+}
+
+class SettingsScene extends Phaser.Scene {
+  constructor() { super('SettingsScene'); }
+  create() {
+    this.add.text(
+      this.scale.width / 2, this.scale.height / 2,
+      'Settings Scene\n(placeholder)',
+      { fontSize: '32px', fill: '#fff', align: 'center' }
+    ).setOrigin(0.5);
+  }
+}
+
+// ============================================================
+//  PHASER GAME CONFIG
+// ============================================================
+const config = {
+  type: Phaser.AUTO,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 390,          // iPhone 14 logical width
+    height: 844,         // iPhone 14 logical height
+    parent: document.body,
+  },
+  backgroundColor: '#1a1a2e',
+  scene: [TitleScene, GameScene, GameOverScene, SettingsScene],
+  input: {
+    activePointers: 3,   // Support multi-touch
+  },
+  physics: {
+    default: 'arcade',
+    arcade: { debug: ALPHA_MODE },
+  },
+};
+
+const game = new Phaser.Game(config);
+</script>
+
+</body>
+</html>
