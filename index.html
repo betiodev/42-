@@ -355,6 +355,9 @@ class GameScene extends Phaser.Scene {
     this.redDot42Done = false;
     this.spawnsSinceLastRed = 0;
     this.redTrap = null;
+    this.redPhaseActive = false;
+    this.redVariationTimer = null;
+    this.isMorphedWhite = false;
 
     // ---- Daily play limit ----
     if (!ALPHA_MODE) {
@@ -393,7 +396,7 @@ class GameScene extends Phaser.Scene {
     // ---- Background miss zone (tap anywhere except dot = game over) ----
     this.missZone = this.add.zone(W / 2, H / 2, W, H).setInteractive();
     this.missZone.on('pointerdown', () => {
-      if (!this.gameActive || this.isPaused) return;
+      if (!this.gameActive || this.isPaused || this.redPhaseActive) return;
       this.endGame();
     });
 
@@ -423,7 +426,7 @@ class GameScene extends Phaser.Scene {
   //  UPDATE LOOP
   // ================================================================
   update(time, delta) {
-    if (!this.gameActive || this.isPaused) return;
+    if (!this.gameActive || this.isPaused || this.redPhaseActive) return;
 
     this.dotCountdown -= delta;
     if (this.dotCountdown <= 0) {
@@ -487,27 +490,28 @@ class GameScene extends Phaser.Scene {
 
   spawnDot() {
     if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
+    this.cleanupRedVariation();
 
     // ---- Decide if red dot ----
     this.isCurrentDotRed = false;
     this.is42RedDot = false;
-    let spawnRedTrapNow = false;
 
     if (this.score >= 42 && !this.redDot42Done) {
       // Special 42 red dot
       this.isCurrentDotRed = true;
       this.is42RedDot = true;
     } else if (this.redDot42Done) {
-      // Frequency-phase red trap dots (separate from main dot)
+      // Frequency-phase red variations
       this.spawnsSinceLastRed++;
       const freq = this.getRedDotFrequency();
       if (this.spawnsSinceLastRed >= freq) {
-        spawnRedTrapNow = true;
         this.spawnsSinceLastRed = 0;
+        this.runRedVariation();
+        return;
       }
     }
 
-    // ---- Create the dot ----
+    // ---- Create the dot (normal white or 42 red) ----
     const pos = this.getValidPosition();
     this.lastDotPos = pos;
 
@@ -532,28 +536,32 @@ class GameScene extends Phaser.Scene {
       if (!this.gameActive || this.isPaused) return;
       this.onDotTap(pointer);
     });
-
-    // ---- Spawn red trap alongside if needed ----
-    if (spawnRedTrapNow) {
-      this.spawnRedTrap();
-    }
   }
 
-  spawnRedTrap() {
-    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+  // ================================================================
+  //  RED DOT VARIATIONS (post-42)
+  // ================================================================
+  runRedVariation() {
+    const v = Phaser.Math.Between(1, 3);
+    if (v === 1) this.redVariationSequential();
+    else if (v === 2) this.redVariationSimultaneous();
+    else this.redVariationMorph();
+  }
+
+  // Variation 1 — Sequential: red appears alone, then white after
+  redVariationSequential() {
+    this.redPhaseActive = true;
 
     const pos = this.getValidPosition();
-    this.redTrap = this.add.circle(pos.x, pos.y, this.currentDotSize * 0.8, 0xff0000);
+    this.lastDotPos = pos;
+    this.redTrap = this.add.circle(pos.x, pos.y, this.currentDotSize, 0xff0000);
     this.redTrap.setInteractive({ useHandCursor: true });
-
     this.redTrap.setScale(0);
     this.tweens.add({
-      targets: this.redTrap,
-      scaleX: 1, scaleY: 1,
+      targets: this.redTrap, scaleX: 1, scaleY: 1,
       duration: 150, ease: 'Back.easeOut',
     });
 
-    // Tapping the red trap = game over
     this.redTrap.on('pointerdown', () => {
       if (!this.gameActive || this.isPaused) return;
       triggerHaptic('heavy');
@@ -561,10 +569,97 @@ class GameScene extends Phaser.Scene {
       this.endGame();
     });
 
-    // Auto-disappear after the current countdown duration
-    this.time.delayedCall(this.currentSpawnInterval, () => {
-      if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+    this.redVariationTimer = this.time.delayedCall(this.currentSpawnInterval, () => {
+      this.cleanupRedVariation();
+      this.spawnDot();
     });
+  }
+
+  // Variation 2 — Simultaneous: red + white at same time
+  redVariationSimultaneous() {
+    // White dot (normal gameplay)
+    const whitePos = this.getValidPosition();
+    this.lastDotPos = whitePos;
+    this.currentDot = this.add.circle(whitePos.x, whitePos.y, this.currentDotSize, 0xffffff);
+    this.currentDot.setInteractive({ useHandCursor: true });
+    this.currentDot.setScale(0);
+    this.tweens.add({
+      targets: this.currentDot, scaleX: 1, scaleY: 1,
+      duration: 150, ease: 'Back.easeOut',
+    });
+    this.dotCountdown = this.currentSpawnInterval;
+    this.dotCountdownMax = this.currentSpawnInterval;
+    this.currentDot.on('pointerdown', (pointer) => {
+      if (!this.gameActive || this.isPaused) return;
+      this.onDotTap(pointer);
+    });
+
+    // Red trap at different position
+    const redPos = this.getValidPosition();
+    this.redTrap = this.add.circle(redPos.x, redPos.y, this.currentDotSize, 0xff0000);
+    this.redTrap.setInteractive({ useHandCursor: true });
+    this.redTrap.setScale(0);
+    this.tweens.add({
+      targets: this.redTrap, scaleX: 1, scaleY: 1,
+      duration: 150, ease: 'Back.easeOut',
+    });
+    this.redTrap.on('pointerdown', () => {
+      if (!this.gameActive || this.isPaused) return;
+      triggerHaptic('heavy');
+      playBeep(150, 0.3, 'square');
+      this.endGame();
+    });
+  }
+
+  // Variation 3 — Morph: red dot transforms into white
+  redVariationMorph() {
+    this.redPhaseActive = true;
+    this.isMorphedWhite = false;
+
+    const pos = this.getValidPosition();
+    this.lastDotPos = pos;
+    this.currentDot = this.add.circle(pos.x, pos.y, this.currentDotSize, 0xff0000);
+    this.currentDot.setInteractive({ useHandCursor: true });
+    this.currentDot.setScale(0);
+    this.tweens.add({
+      targets: this.currentDot, scaleX: 1, scaleY: 1,
+      duration: 150, ease: 'Back.easeOut',
+    });
+
+    this.currentDot.on('pointerdown', (pointer) => {
+      if (!this.gameActive || this.isPaused) return;
+      if (!this.isMorphedWhite) {
+        triggerHaptic('heavy');
+        playBeep(150, 0.3, 'square');
+        this.endGame();
+      } else {
+        this.onDotTap(pointer);
+      }
+    });
+
+    // After half the interval, morph red → white
+    const morphDelay = this.currentSpawnInterval * 0.5;
+    this.redVariationTimer = this.time.delayedCall(morphDelay, () => {
+      if (!this.gameActive || !this.currentDot) return;
+      this.isMorphedWhite = true;
+      this.redPhaseActive = false;
+      this.currentDot.setFillStyle(0xffffff);
+      this.tweens.add({
+        targets: this.currentDot,
+        scaleX: 1.3, scaleY: 1.3,
+        duration: 100, yoyo: true, ease: 'Cubic.easeOut',
+      });
+      this.dotCountdown = this.currentSpawnInterval;
+      this.dotCountdownMax = this.currentSpawnInterval;
+      this.redVariationTimer = null;
+    });
+  }
+
+  cleanupRedVariation() {
+    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+    if (this.redVariationTimer) { this.redVariationTimer.remove(); this.redVariationTimer = null; }
+    this.redPhaseActive = false;
+    this.isMorphedWhite = false;
   }
 
   getRedDotFrequency() {
@@ -692,7 +787,7 @@ class GameScene extends Phaser.Scene {
 
     // Remove game elements
     if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
-    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+    this.cleanupRedVariation();
 
     // Screen shake
     this.cameras.main.shake(900, 0.035);
@@ -760,7 +855,7 @@ class GameScene extends Phaser.Scene {
   // ================================================================
   endGame() {
     this.gameActive = false;
-    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+    this.cleanupRedVariation();
 
     // Final beep
     playBeep(300, 0.4, 'triangle');
