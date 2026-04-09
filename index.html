@@ -642,16 +642,18 @@ class GameScene extends Phaser.Scene {
   // ================================================================
   createRipple(x, y, size) {
     if (size > 39) {
-      // Inward ripple: large ring shrinks to centre
-      const ring = this.add.circle(x, y, size * 2);
-      ring.setStrokeStyle(3, 0xffffff, 0.7);
-      ring.setFillStyle(0, 0);
-      this.tweens.add({
-        targets: ring,
-        scaleX: 0, scaleY: 0, alpha: 0,
-        duration: 350, ease: 'Cubic.easeIn',
-        onComplete: () => ring.destroy(),
-      });
+      // Inward ripple: 3 concentric rings collapse toward centre
+      for (let i = 0; i < 3; i++) {
+        const ring = this.add.circle(x, y, size * (1.2 + i * 0.5));
+        ring.setStrokeStyle(2, 0xffffff, 0.7 - i * 0.15);
+        ring.setFillStyle(0, 0);
+        this.tweens.add({
+          targets: ring,
+          scaleX: 0, scaleY: 0, alpha: 0,
+          duration: 140, delay: i * 20, ease: 'Cubic.easeIn',
+          onComplete: () => ring.destroy(),
+        });
+      }
     } else {
       // Outward pop: small ring expands outward
       const ring = this.add.circle(x, y, size);
@@ -661,7 +663,7 @@ class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: ring,
         scaleX: 2.5, scaleY: 2.5, alpha: 0,
-        duration: 350, ease: 'Cubic.easeOut',
+        duration: 140, ease: 'Cubic.easeOut',
         onComplete: () => ring.destroy(),
       });
     }
