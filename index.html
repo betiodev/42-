@@ -354,6 +354,7 @@ class GameScene extends Phaser.Scene {
     this.is42RedDot = false;
     this.redDot42Done = false;
     this.spawnsSinceLastRed = 0;
+    this.redTrap = null;
 
     // ---- Daily play limit ----
     if (!ALPHA_MODE) {
@@ -490,17 +491,18 @@ class GameScene extends Phaser.Scene {
     // ---- Decide if red dot ----
     this.isCurrentDotRed = false;
     this.is42RedDot = false;
+    let spawnRedTrapNow = false;
 
     if (this.score >= 42 && !this.redDot42Done) {
       // Special 42 red dot
       this.isCurrentDotRed = true;
       this.is42RedDot = true;
     } else if (this.redDot42Done) {
-      // Frequency-phase red dots
+      // Frequency-phase red trap dots (separate from main dot)
       this.spawnsSinceLastRed++;
       const freq = this.getRedDotFrequency();
       if (this.spawnsSinceLastRed >= freq) {
-        this.isCurrentDotRed = true;
+        spawnRedTrapNow = true;
         this.spawnsSinceLastRed = 0;
       }
     }
@@ -529,6 +531,39 @@ class GameScene extends Phaser.Scene {
     this.currentDot.on('pointerdown', (pointer) => {
       if (!this.gameActive || this.isPaused) return;
       this.onDotTap(pointer);
+    });
+
+    // ---- Spawn red trap alongside if needed ----
+    if (spawnRedTrapNow) {
+      this.spawnRedTrap();
+    }
+  }
+
+  spawnRedTrap() {
+    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+
+    const pos = this.getValidPosition();
+    this.redTrap = this.add.circle(pos.x, pos.y, this.currentDotSize * 0.8, 0xff0000);
+    this.redTrap.setInteractive({ useHandCursor: true });
+
+    this.redTrap.setScale(0);
+    this.tweens.add({
+      targets: this.redTrap,
+      scaleX: 1, scaleY: 1,
+      duration: 150, ease: 'Back.easeOut',
+    });
+
+    // Tapping the red trap = game over
+    this.redTrap.on('pointerdown', () => {
+      if (!this.gameActive || this.isPaused) return;
+      triggerHaptic('heavy');
+      playBeep(150, 0.3, 'square');
+      this.endGame();
+    });
+
+    // Auto-disappear after the current countdown duration
+    this.time.delayedCall(this.currentSpawnInterval, () => {
+      if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
     });
   }
 
@@ -599,42 +634,11 @@ class GameScene extends Phaser.Scene {
 
   onRedDotTap(x, y) {
     // ---- The 42 special: sky explosion & lose ----
-    if (this.is42RedDot) {
-      this.redDot42Done = true;
-      this.is42RedDot = false;
-      triggerHaptic('heavy');
-      playBeep(100, 0.5, 'sawtooth');
-      this.skyExplosion(x, y);
-      return;
-    }
-
-    // ---- Regular red dot after 42: penalty ----
-    this.score = Math.max(0, this.score - 5);
-    this.scoreText.setText('' + this.score);
+    this.redDot42Done = true;
+    this.is42RedDot = false;
     triggerHaptic('heavy');
-    playBeep(150, 0.3, 'square');
-
-    // Red flash
-    const flash = this.add.graphics();
-    flash.fillStyle(0xff0000, 0.3);
-    flash.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.tweens.add({
-      targets: flash, alpha: 0, duration: 300,
-      onComplete: () => flash.destroy(),
-    });
-
-    // Floating "-5"
-    const penText = this.add.text(x, y, '-5', {
-      fontSize: '32px', fill: '#ff0000', fontStyle: 'bold',
-      fontFamily: 'Arial, sans-serif',
-    }).setOrigin(0.5);
-    this.tweens.add({
-      targets: penText,
-      y: penText.y - 60, alpha: 0, duration: 600,
-      onComplete: () => penText.destroy(),
-    });
-
-    this.spawnDot();
+    playBeep(100, 0.5, 'sawtooth');
+    this.skyExplosion(x, y);
   }
 
   // ================================================================
@@ -644,7 +648,7 @@ class GameScene extends Phaser.Scene {
     if (size > 39) {
       // Inward ripple: 3 concentric rings collapse toward centre
       for (let i = 0; i < 3; i++) {
-        const ring = this.add.circle(x, y, size * (1.2 + i * 0.5));
+        const ring = this.add.circle(x, y, size);
         ring.setStrokeStyle(2, 0xffffff, 0.7 - i * 0.15);
         ring.setFillStyle(0, 0);
         this.tweens.add({
@@ -688,6 +692,7 @@ class GameScene extends Phaser.Scene {
 
     // Remove game elements
     if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
+    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
 
     // Screen shake
     this.cameras.main.shake(900, 0.035);
@@ -755,6 +760,7 @@ class GameScene extends Phaser.Scene {
   // ================================================================
   endGame() {
     this.gameActive = false;
+    if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
 
     // Final beep
     playBeep(300, 0.4, 'triangle');
