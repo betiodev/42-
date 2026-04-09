@@ -853,17 +853,17 @@ class GameOverScene extends Phaser.Scene {
     const H = this.scale.height;
 
     // ---- White background ----
-    this.cameras.main.setBackgroundColor('#ffffff');
+    this.cameras.main.setBackgroundColor('#000000');
 
     // ---- "GAME OVER" header ----
     this.add.text(W / 2, H * 0.10, 'GAME OVER', {
-      fontSize: '42px', fill: '#1a1a2e', fontStyle: 'bold',
+      fontSize: '42px', fill: '#ffffff', fontStyle: 'bold',
       fontFamily: 'Arial Black, Impact, sans-serif',
     }).setOrigin(0.5);
 
     // ---- Score display (big number) ----
     const scoreText = this.add.text(W / 2, H * 0.23, '' + this.finalScore, {
-      fontSize: '90px', fill: '#e94560', fontStyle: 'bold',
+      fontSize: '90px', fill: '#ffffff', fontStyle: 'bold',
       fontFamily: 'Arial Black, Impact, sans-serif',
     }).setOrigin(0.5);
 
@@ -887,7 +887,7 @@ class GameOverScene extends Phaser.Scene {
     const isNewHigh = saveHighScore(this.finalScore);
     if (isNewHigh && this.finalScore > 0) {
       const highLabel = this.add.text(W / 2, yOffset, 'NEW HIGH SCORE!', {
-        fontSize: '26px', fill: '#e94560', fontStyle: 'bold',
+        fontSize: '26px', fill: '#ffffff', fontStyle: 'bold',
         fontFamily: 'Arial, sans-serif',
       }).setOrigin(0.5).setAlpha(0);
 
@@ -910,7 +910,7 @@ class GameOverScene extends Phaser.Scene {
       const hi = loadHighScore();
       if (hi > 0) {
         this.add.text(W / 2, yOffset, 'High Score: ' + hi, {
-          fontSize: '18px', fill: '#888888',
+          fontSize: '18px', fill: '#ffffff',
           fontFamily: 'Arial, sans-serif',
         }).setOrigin(0.5);
         yOffset += 32;
@@ -923,7 +923,7 @@ class GameOverScene extends Phaser.Scene {
       const msg = EASTER_EGG_MESSAGES[easterEgg] || '';
       if (msg) {
         const eggText = this.add.text(W / 2, yOffset + 16, msg, {
-          fontSize: '22px', fill: '#0f3460', fontStyle: 'italic',
+          fontSize: '22px', fill: '#ffffff', fontStyle: 'italic',
           fontFamily: 'Georgia, serif',
           align: 'center',
           wordWrap: { width: W * 0.8 },
@@ -963,20 +963,20 @@ class GameOverScene extends Phaser.Scene {
 
       // Subtle label below
       this.add.text(W / 2, btnY + 178, 'Remove ads & unlock themes', {
-        fontSize: '12px', fill: '#999999',
+        fontSize: '12px', fill: '#ffffff',
         fontFamily: 'Arial, sans-serif',
       }).setOrigin(0.5);
     } else {
       // Pro badge
       this.add.text(W / 2, btnY + 150, 'PRO', {
-        fontSize: '14px', fill: '#e94560', fontStyle: 'bold',
+        fontSize: '14px', fill: '#ffffff', fontStyle: 'bold',
         fontFamily: 'monospace',
       }).setOrigin(0.5).setAlpha(0.6);
     }
 
     // ---- Title link (small, bottom) ----
     const homeText = this.add.text(W / 2, H * 0.95, '< back to title', {
-      fontSize: '16px', fill: '#aaaaaa',
+      fontSize: '16px', fill: '#ffffff',
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     homeText.on('pointerdown', () => {
@@ -1005,7 +1005,7 @@ class GameOverScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
     const toast = this.add.text(W / 2, H * 0.88, msg, {
-      fontSize: '16px', fill: '#ffffff', backgroundColor: '#333333',
+      fontSize: '16px', fill: '#ffffff', backgroundColor: '#222222',
       padding: { x: 16, y: 10 },
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0.5).setAlpha(0);
@@ -1040,16 +1040,16 @@ class GameOverScene extends Phaser.Scene {
     const cardY = H / 2 - cardH / 2;
 
     const card = this.add.graphics();
-    card.fillStyle(0xffffff, 1);
+    card.fillStyle(0x111111, 1);
     card.fillRoundedRect(cardX, cardY, cardW, cardH, 20);
 
     this.add.text(W / 2, cardY + 36, '42? PRO', {
-      fontSize: '30px', fill: '#e94560', fontStyle: 'bold',
+      fontSize: '30px', fill: '#ffffff', fontStyle: 'bold',
       fontFamily: 'Arial Black, Impact, sans-serif',
     }).setOrigin(0.5);
 
     this.add.text(W / 2, cardY + 80, 'Remove ads\nUnlock color themes\nExtra game modes', {
-      fontSize: '18px', fill: '#333333', align: 'center',
+      fontSize: '18px', fill: '#ffffff', align: 'center',
       lineSpacing: 8,
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0.5);
@@ -1065,7 +1065,7 @@ class GameOverScene extends Phaser.Scene {
       }, { width: 260 });
 
       this.add.text(W / 2, cardY + 210, 'Free during alpha testing', {
-        fontSize: '12px', fill: '#999999', fontStyle: 'italic',
+        fontSize: '12px', fill: '#ffffff', fontStyle: 'italic',
         fontFamily: 'Arial, sans-serif',
       }).setOrigin(0.5);
     } else {
@@ -1076,7 +1076,7 @@ class GameOverScene extends Phaser.Scene {
 
     // Close / dismiss
     const closeText = this.add.text(W / 2, cardY + cardH - 24, 'Maybe later', {
-      fontSize: '15px', fill: '#aaaaaa',
+      fontSize: '15px', fill: '#ffffff',
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     closeText.on('pointerdown', () => {
@@ -1097,13 +1097,11 @@ class SettingsScene extends Phaser.Scene {
     this.settings = loadSettings();
 
     // ---- Background ----
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 1);
-    bg.fillRect(0, 0, W, H);
+    // Background handled by global config (black)
 
     // ---- Title ----
     this.add.text(W / 2, H * 0.10, 'SETTINGS', {
-      fontSize: '40px', fill: '#e94560', fontStyle: 'bold',
+      fontSize: '40px', fill: '#ffffff', fontStyle: 'bold',
       fontFamily: 'Arial Black, Impact, sans-serif',
     }).setOrigin(0.5);
 
@@ -1121,12 +1119,12 @@ class SettingsScene extends Phaser.Scene {
 
     // ---- Divider ----
     const divider = this.add.graphics();
-    divider.lineStyle(1, 0x333355, 0.5);
+    divider.lineStyle(1, 0xffffff, 0.2);
     divider.lineBetween(W * 0.15, H * 0.52, W * 0.85, H * 0.52);
 
     // ---- Reset high score ----
     const resetText = this.add.text(W / 2, H * 0.60, 'Reset High Score', {
-      fontSize: '20px', fill: '#666688',
+      fontSize: '20px', fill: '#ffffff',
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
@@ -1135,17 +1133,17 @@ class SettingsScene extends Phaser.Scene {
         // Second tap: actually reset
         try { localStorage.removeItem(STORAGE_KEY_HIGH); } catch (e) {}
         resetText.setText('Score reset!');
-        resetText.setFill('#e94560');
+        resetText.setFill('#ffffff');
         this.confirmingReset = false;
         triggerHaptic('heavy');
         this.time.delayedCall(1500, () => {
           resetText.setText('Reset High Score');
-          resetText.setFill('#666688');
+          resetText.setFill('#ffffff');
         });
       } else {
         // First tap: ask for confirmation
         resetText.setText('Tap again to confirm');
-        resetText.setFill('#ff6666');
+        resetText.setFill('#ffffff');
         this.confirmingReset = true;
         triggerHaptic('light');
         // Auto-cancel after 3 seconds
@@ -1153,7 +1151,7 @@ class SettingsScene extends Phaser.Scene {
           if (this.confirmingReset) {
             this.confirmingReset = false;
             resetText.setText('Reset High Score');
-            resetText.setFill('#666688');
+            resetText.setFill('#ffffff');
           }
         });
       }
@@ -1161,7 +1159,7 @@ class SettingsScene extends Phaser.Scene {
 
     // ---- Version info ----
     this.add.text(W / 2, H * 0.68, 'v0.1.0' + (ALPHA_MODE ? ' (Alpha)' : ''), {
-      fontSize: '14px', fill: '#444466', fontStyle: 'italic',
+      fontSize: '14px', fill: '#ffffff', fontStyle: 'italic',
       fontFamily: 'monospace',
     }).setOrigin(0.5);
 
@@ -1176,7 +1174,7 @@ class SettingsScene extends Phaser.Scene {
 
     // Label text (left-aligned)
     this.add.text(W * 0.15, y, label, {
-      fontSize: '24px', fill: '#ccccdd',
+      fontSize: '24px', fill: '#ffffff',
       fontFamily: 'Arial, sans-serif',
     }).setOrigin(0, 0.5);
 
@@ -1194,9 +1192,9 @@ class SettingsScene extends Phaser.Scene {
     const drawState = () => {
       track.clear();
       if (isOn) {
-        track.fillStyle(0xe94560, 1);
+        track.fillStyle(0xffffff, 1);
       } else {
-        track.fillStyle(0x333355, 1);
+        track.fillStyle(0x333333, 1);
       }
       track.fillRoundedRect(trackX - trackW / 2, y - trackH / 2, trackW, trackH, trackR);
       thumb.x = isOn ? trackX + trackW / 2 - 16 : trackX - trackW / 2 + 16;
