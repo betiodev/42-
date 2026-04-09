@@ -35,7 +35,7 @@ const DOT_REDUCTION_IDLE   = 1;          // Shrink per idle tick
 // Timers (ms)
 const TIMER_GAME_DURATION  = 42000;      // Total round length
 const TIMER_IDLE_INTERVAL  = 500;        // How often the idle-shrink fires
-const TIMER_SPAWN_INTERVAL = 3000;       // Dot respawn / reposition interval
+const TIMER_SPAWN_INTERVAL = 2700;       // Per-dot countdown (ms)
 
 // Scoring
 const SCORE_PER_TAP        = 1;          // Points awarded per successful tap
@@ -345,7 +345,8 @@ class GameScene extends Phaser.Scene {
     this.isPaused = false;
     this.currentDotSize = DOT_START_SIZE;
     this.currentSpawnInterval = TIMER_SPAWN_INTERVAL;
-    this.timeRemaining = TIMER_GAME_DURATION;
+    this.dotCountdown = 0;
+    this.dotCountdownMax = 0;
     this.lastDotPos = null;
     this.totalTaps = 0;
     this.currentDot = null;
@@ -388,11 +389,12 @@ class GameScene extends Phaser.Scene {
       fontFamily: 'Arial Black, Impact, sans-serif',
     }).setOrigin(0.5);
 
-    // ---- Time remaining text ----
-    this.timeText = this.add.text(W / 2, 84, '42.0s', {
-      fontSize: '18px', fill: '#ffffff',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setAlpha(0.5);
+    // ---- Background miss zone (tap anywhere except dot = game over) ----
+    this.missZone = this.add.zone(W / 2, H / 2, W, H).setInteractive();
+    this.missZone.on('pointerdown', () => {
+      if (!this.gameActive || this.isPaused) return;
+      this.endGame();
+    });
 
     // ---- Head start indicator ----
     if (titleEasterEggFound) {
@@ -410,7 +412,6 @@ class GameScene extends Phaser.Scene {
 
     // ---- Spawn first dot ----
     this.spawnDot();
-    this.resetSpawnTimer();
 
     // ---- Page Visibility API ----
     this.boundVisHandler = this.handleVisibility.bind(this);
@@ -423,15 +424,21 @@ class GameScene extends Phaser.Scene {
   update(time, delta) {
     if (!this.gameActive || this.isPaused) return;
 
-    this.timeRemaining -= delta;
-    if (this.timeRemaining <= 0) {
-      this.timeRemaining = 0;
+    this.dotCountdown -= delta;
+    if (this.dotCountdown <= 0) {
+      this.dotCountdown = 0;
       this.updateTimerBar();
+      // 42 red dot expiring just despawns it
+      if (this.is42RedDot) {
+        this.redDot42Done = true;
+        this.is42RedDot = false;
+        this.spawnDot();
+        return;
+      }
       this.endGame();
       return;
     }
     this.updateTimerBar();
-    this.timeText.setText((this.timeRemaining / 1000).toFixed(1) + 's');
   }
 
   // ================================================================
@@ -439,7 +446,8 @@ class GameScene extends Phaser.Scene {
   // ================================================================
   updateTimerBar() {
     const W = this.scale.width;
-    const ratio = Math.max(0, this.timeRemaining / TIMER_GAME_DURATION);
+    const ratio = this.dotCountdownMax > 0
+      ? Math.max(0, this.dotCountdown / this.dotCountdownMax) : 1;
     this.timerBar.clear();
 
     let color;
@@ -513,18 +521,9 @@ class GameScene extends Phaser.Scene {
       duration: 150, ease: 'Back.easeOut',
     });
 
-    // ---- 42 red dot: 3-second lifespan, pause spawn timer ----
-    if (this.is42RedDot) {
-      if (this.spawnTimer) this.spawnTimer.remove();
-      this.redDotExpireTimer = this.time.delayedCall(3000, () => {
-        if (this.isCurrentDotRed && this.is42RedDot) {
-          this.redDot42Done = true;
-          this.is42RedDot = false;
-          this.spawnDot();
-          this.resetSpawnTimer();
-        }
-      });
-    }
+    // ---- Per-dot countdown ----
+    this.dotCountdown = this.currentSpawnInterval;
+    this.dotCountdownMax = this.currentSpawnInterval;
 
     // ---- Tap handler ----
     this.currentDot.on('pointerdown', (pointer) => {
@@ -538,18 +537,6 @@ class GameScene extends Phaser.Scene {
     if (this.score < 80)  return 7;
     if (this.score < 100) return 5;
     return 3;
-  }
-
-  resetSpawnTimer() {
-    if (this.spawnTimer) this.spawnTimer.remove();
-    this.spawnTimer = this.time.addEvent({
-      delay: this.currentSpawnInterval,
-      callback: () => {
-        if (!this.gameActive || this.isPaused || this.is42RedDot) return;
-        this.spawnDot();
-        this.resetSpawnTimer();
-      },
-    });
   }
 
   // ================================================================
@@ -608,7 +595,6 @@ class GameScene extends Phaser.Scene {
 
     // Respawn
     this.spawnDot();
-    this.resetSpawnTimer();
   }
 
   onRedDotTap(x, y) {
@@ -616,7 +602,6 @@ class GameScene extends Phaser.Scene {
     if (this.is42RedDot) {
       this.redDot42Done = true;
       this.is42RedDot = false;
-      if (this.redDotExpireTimer) this.redDotExpireTimer.remove();
       triggerHaptic('heavy');
       playBeep(100, 0.5, 'sawtooth');
       this.skyExplosion(x, y);
@@ -650,7 +635,6 @@ class GameScene extends Phaser.Scene {
     });
 
     this.spawnDot();
-    this.resetSpawnTimer();
   }
 
   // ================================================================
@@ -702,7 +686,6 @@ class GameScene extends Phaser.Scene {
 
     // Remove game elements
     if (this.currentDot) { this.currentDot.destroy(); this.currentDot = null; }
-    if (this.spawnTimer)  { this.spawnTimer.remove(); }
 
     // Screen shake
     this.cameras.main.shake(900, 0.035);
@@ -766,12 +749,10 @@ class GameScene extends Phaser.Scene {
   }
 
   // ================================================================
-  //  GAME END (timer expired)
+  //  GAME END (dot countdown expired or background tap)
   // ================================================================
   endGame() {
     this.gameActive = false;
-    if (this.spawnTimer) this.spawnTimer.remove();
-    if (this.redDotExpireTimer) this.redDotExpireTimer.remove();
 
     // Final beep
     playBeep(300, 0.4, 'triangle');
