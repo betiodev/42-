@@ -340,7 +340,8 @@ class GameScene extends Phaser.Scene {
     const H = this.scale.height;
 
     // ---- Game state ----
-    this.score = titleEasterEggFound ? 11 : 0;
+    this.score = 0;
+    this.headStartActive = !!titleEasterEggFound;
     this.gameActive = true;
     this.isPaused = false;
     this.currentDotSize = DOT_START_SIZE;
@@ -694,7 +695,11 @@ class GameScene extends Phaser.Scene {
     const p1 = this.input.pointer1;
     const p2 = this.input.pointer2;
     const twoFinger = p1 && p2 && p1.isDown && p2.isDown;
-    const points = twoFinger ? 2 : SCORE_PER_TAP;
+    let points = twoFinger ? 2 : SCORE_PER_TAP;
+    if (this.headStartActive) {
+      points = 11;
+      this.headStartActive = false;
+    }
 
     this.score += points;
     this.totalTaps++;
