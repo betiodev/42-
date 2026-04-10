@@ -782,8 +782,8 @@ class GameScene extends Phaser.Scene {
     const factor = this.score <= 41 ? 0.995
                  : this.score <= 100 ? 0.990
                  : 0.985;
-    this.currentDotSize = Math.max(44, this.currentDotSize * factor);
-    this.currentSpawnInterval = Math.max(400, this.currentSpawnInterval * factor);
+    this.currentDotSize = Math.max(42, this.currentDotSize * factor);
+    this.currentSpawnInterval = Math.max(300, this.currentSpawnInterval * factor);
   }
 
   // ================================================================
