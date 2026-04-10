@@ -569,7 +569,7 @@ class GameScene extends Phaser.Scene {
       this.endGame();
     });
 
-    this.redVariationTimer = this.time.delayedCall(this.currentSpawnInterval, () => {
+    this.redVariationTimer = this.time.delayedCall(this.currentSpawnInterval * 0.7, () => {
       this.cleanupRedVariation();
       this.spawnDot();
     });
@@ -609,6 +609,12 @@ class GameScene extends Phaser.Scene {
       playBeep(150, 0.3, 'square');
       this.endGame();
     });
+
+    // Red trap auto-disappears after 70% of countdown
+    this.redVariationTimer = this.time.delayedCall(this.currentSpawnInterval * 0.7, () => {
+      if (this.redTrap) { this.redTrap.destroy(); this.redTrap = null; }
+      this.redVariationTimer = null;
+    });
   }
 
   // Variation 3 — Morph: red dot transforms into white
@@ -638,7 +644,7 @@ class GameScene extends Phaser.Scene {
     });
 
     // After half the interval, morph red → white
-    const morphDelay = this.currentSpawnInterval * 0.5;
+    const morphDelay = this.currentSpawnInterval * 0.35;
     this.redVariationTimer = this.time.delayedCall(morphDelay, () => {
       if (!this.gameActive || !this.currentDot) return;
       this.isMorphedWhite = true;
