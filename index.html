@@ -693,13 +693,16 @@ class GameScene extends Phaser.Scene {
     const p1 = this.input.pointer1;
     const p2 = this.input.pointer2;
     const twoFinger = p1 && p2 && p1.isDown && p2.isDown;
-    let points = twoFinger ? 2 : SCORE_PER_TAP;
+
+    let points;
     if (window.HEAD_START_ACTIVE) {
       points = 11;
+      this.score += 11;
       window.HEAD_START_ACTIVE = false;
+    } else {
+      points = twoFinger ? 2 : SCORE_PER_TAP;
+      this.score += points;
     }
-
-    this.score += points;
     this.totalTaps++;
 
     // Update score display with pop
