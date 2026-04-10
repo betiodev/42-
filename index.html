@@ -644,7 +644,7 @@ class GameScene extends Phaser.Scene {
     });
 
     // After half the interval, morph red → white
-    const morphDelay = this.currentSpawnInterval * 0.35;
+    const morphDelay = Math.max(275, this.currentSpawnInterval * 0.35);
     this.redVariationTimer = this.time.delayedCall(morphDelay, () => {
       if (!this.gameActive || !this.currentDot) return;
       this.isMorphedWhite = true;
