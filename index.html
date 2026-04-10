@@ -236,7 +236,7 @@ function playBeep(freq, duration, type) {
 }
 
 // Head-start flag (set by TitleScene 42-tap easter egg)
-let titleEasterEggFound = false;
+window.HEAD_START_ACTIVE = false;
 
 // ============================================================
 //  SCENES
@@ -288,7 +288,7 @@ class TitleScene extends Phaser.Scene {
 
       // 42 taps = secret message + head-start flag
       if (this.dotTapCount === 42) {
-        titleEasterEggFound = true;
+        window.HEAD_START_ACTIVE = true;
         triggerHaptic('heavy');
         const secret = this.add.text(W / 2, H * 0.45, 'You found the answer.\nHead start unlocked!', {
           fontSize: '20px', fill: '#ffffff', fontStyle: 'italic',
@@ -315,8 +315,7 @@ class TitleScene extends Phaser.Scene {
 
     // ---- Buttons ----
     createButton(this, W / 2, H * 0.68, 'START', null, () => {
-      this.scene.start('GameScene', { headStart: titleEasterEggFound });
-      titleEasterEggFound = false;
+      this.scene.start('GameScene');
     });
 
     createButton(this, W / 2, H * 0.78, 'SETTINGS', null, () => {
@@ -336,17 +335,12 @@ class TitleScene extends Phaser.Scene {
 class GameScene extends Phaser.Scene {
   constructor() { super('GameScene'); }
 
-  init(data) {
-    this.initData = data || {};
-  }
-
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
 
     // ---- Game state ----
     this.score = 0;
-    this.headStartActive = !!this.initData.headStart;
     this.gameActive = true;
     this.isPaused = false;
     this.currentDotSize = DOT_START_SIZE;
@@ -407,7 +401,7 @@ class GameScene extends Phaser.Scene {
     });
 
     // ---- Head start indicator ----
-    if (this.headStartActive) {
+    if (window.HEAD_START_ACTIVE) {
       const hsText = this.add.text(W / 2, 116, 'Head Start +11', {
         fontSize: '18px', fill: '#ffffff', fontStyle: 'italic',
         fontFamily: 'Georgia, serif',
@@ -700,9 +694,9 @@ class GameScene extends Phaser.Scene {
     const p2 = this.input.pointer2;
     const twoFinger = p1 && p2 && p1.isDown && p2.isDown;
     let points = twoFinger ? 2 : SCORE_PER_TAP;
-    if (this.headStartActive) {
+    if (window.HEAD_START_ACTIVE) {
       points = 11;
-      this.headStartActive = false;
+      window.HEAD_START_ACTIVE = false;
     }
 
     this.score += points;
