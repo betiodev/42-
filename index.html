@@ -47,7 +47,6 @@ const DOT_GROWTH_MIN       = DOT_MIN_SIZE;    // Min size floor
 
 // Easter-egg score triggers (checked in order, first match wins)
 const EASTER_EGG_SCORES = [
-  42,    // "The Answer"
   69,    // nice
   100,   // Century club
   142,   // 100 + 42
@@ -63,7 +62,6 @@ const EASTER_EGG_SCORES = [
 
 // Easter-egg messages keyed by score
 const EASTER_EGG_MESSAGES = {
-  42:   'The Answer to Life, the Universe,\nand Everything.',
   69:   'Nice.',
   100:  'Welcome to the Century Club!',
   142:  '100 + 42 = Enlightenment.',
@@ -358,6 +356,7 @@ class GameScene extends Phaser.Scene {
     this.redPhaseActive = false;
     this.redVariationTimer = null;
     this.isMorphedWhite = false;
+    this.deathMessage = '';
 
     // ---- Daily play limit ----
     if (!ALPHA_MODE) {
@@ -436,6 +435,14 @@ class GameScene extends Phaser.Scene {
         this.redDot42Done = true;
         this.is42RedDot = false;
         this.spawnDot();
+        return;
+      }
+      // Score 42 timer expiry = sky explosion
+      if (this.score === 42) {
+        this.deathMessage = 'Hello there';
+        const cx = this.currentDot ? this.currentDot.x : this.scale.width / 2;
+        const cy = this.currentDot ? this.currentDot.y : this.scale.height / 2;
+        this.skyExplosion(cx, cy);
         return;
       }
       this.endGame();
@@ -740,12 +747,13 @@ class GameScene extends Phaser.Scene {
   }
 
   onRedDotTap(x, y) {
-    // ---- The 42 special: sky explosion & lose ----
+    // ---- The 42 special: tapping red = game over ----
     this.redDot42Done = true;
     this.is42RedDot = false;
     triggerHaptic('heavy');
-    playBeep(100, 0.5, 'sawtooth');
-    this.skyExplosion(x, y);
+    playBeep(150, 0.3, 'square');
+    this.deathMessage = 'patience is key';
+    this.endGame();
   }
 
   // ================================================================
@@ -861,7 +869,7 @@ class GameScene extends Phaser.Scene {
     // Transition to game over
     this.time.delayedCall(2500, () => {
       this.cleanup();
-      this.scene.start('GameOverScene', { score: this.score });
+      this.scene.start('GameOverScene', { score: this.score, message: this.deathMessage || '' });
     });
   }
 
@@ -882,12 +890,12 @@ class GameScene extends Phaser.Scene {
         duration: 300,
         onComplete: () => {
           this.cleanup();
-          this.scene.start('GameOverScene', { score: this.score });
+          this.scene.start('GameOverScene', { score: this.score, message: this.deathMessage || '' });
         },
       });
     } else {
       this.cleanup();
-      this.scene.start('GameOverScene', { score: this.score });
+      this.scene.start('GameOverScene', { score: this.score, message: this.deathMessage || '' });
     }
   }
 
@@ -945,6 +953,7 @@ class GameOverScene extends Phaser.Scene {
 
   init(data) {
     this.finalScore = data.score || 0;
+    this.deathMessage = data.message || '';
   }
 
   create() {
@@ -1016,10 +1025,10 @@ class GameOverScene extends Phaser.Scene {
       }
     }
 
-    // ---- Easter egg message ----
+    // ---- Easter egg / death message ----
     const easterEgg = EASTER_EGG_SCORES.find(s => s === this.finalScore);
-    if (easterEgg !== undefined) {
-      const msg = EASTER_EGG_MESSAGES[easterEgg] || '';
+    const msg = this.deathMessage || (easterEgg !== undefined ? EASTER_EGG_MESSAGES[easterEgg] : '') || '';
+    {
       if (msg) {
         const eggText = this.add.text(W / 2, yOffset + 16, msg, {
           fontSize: '22px', fill: '#ffffff', fontStyle: 'italic',
