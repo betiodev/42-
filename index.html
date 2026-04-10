@@ -315,7 +315,8 @@ class TitleScene extends Phaser.Scene {
 
     // ---- Buttons ----
     createButton(this, W / 2, H * 0.68, 'START', null, () => {
-      this.scene.start('GameScene');
+      this.scene.start('GameScene', { headStart: titleEasterEggFound });
+      titleEasterEggFound = false;
     });
 
     createButton(this, W / 2, H * 0.78, 'SETTINGS', null, () => {
@@ -335,13 +336,17 @@ class TitleScene extends Phaser.Scene {
 class GameScene extends Phaser.Scene {
   constructor() { super('GameScene'); }
 
+  init(data) {
+    this.initData = data || {};
+  }
+
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
 
     // ---- Game state ----
     this.score = 0;
-    this.headStartActive = !!titleEasterEggFound;
+    this.headStartActive = !!this.initData.headStart;
     this.gameActive = true;
     this.isPaused = false;
     this.currentDotSize = DOT_START_SIZE;
@@ -402,7 +407,7 @@ class GameScene extends Phaser.Scene {
     });
 
     // ---- Head start indicator ----
-    if (titleEasterEggFound) {
+    if (this.headStartActive) {
       const hsText = this.add.text(W / 2, 116, 'Head Start +11', {
         fontSize: '18px', fill: '#ffffff', fontStyle: 'italic',
         fontFamily: 'Georgia, serif',
@@ -412,7 +417,6 @@ class GameScene extends Phaser.Scene {
         duration: 400, yoyo: true, hold: 2000,
         onComplete: () => hsText.destroy(),
       });
-      titleEasterEggFound = false; // consume the flag
     }
 
     // ---- Spawn first dot ----
