@@ -24,6 +24,7 @@ const DOT_GROWTH_MIN       = DOT_MIN_SIZE;    // Min size floor
 
 // Easter-egg score triggers (checked in order, first match wins)
 const EASTER_EGG_SCORES = [
+  7,     // SIUUU (Ronaldo)
   69,    // nice
   100,   // Century club
   142,   // 100 + 42
@@ -39,6 +40,7 @@ const EASTER_EGG_SCORES = [
 
 // Easter-egg messages keyed by score
 const EASTER_EGG_MESSAGES = {
+  7:    'SIUUU',
   69:   'Nice.',
   100:  'Welcome to the Century Club!',
   142:  '100 + 42 = Enlightenment.',
